@@ -1,0 +1,59 @@
+import streamlit as st
+import yfinance as yf
+import json
+import os
+
+st.set_page_config(page_title="Add Stocks", layout="wide")
+st.title("➕ Add New Stock")
+
+def load_data():
+    if os.path.exists('portfolio.json'):
+        try:
+            with open('portfolio.json', 'r') as f: return json.load(f)
+        except: return {}
+    return {}
+
+def save_data(data):
+    with open('portfolio.json', 'w') as f:
+        json.dump(data, f, indent=4)
+
+portfolio = load_data()
+
+with st.form("add_stock_form"):
+    ticker = st.text_input("Stock Ticker (e.g., TSLA, NVDA)").upper().strip()
+    buy_price = st.number_input("Price you bought it at", min_value=0.01)
+    shares = st.number_input("Number of shares", min_value=0.1)
+    
+    submit = st.form_submit_button("Add to Portfolio")
+
+    if submit and ticker:
+        # 1. First, check if it's obviously fake
+        if len(ticker) > 10 or " " in ticker:
+            st.error("Invalid format.")
+        else:
+            with st.spinner(f"Verifying {ticker}..."):
+                try:
+                    check_stock = yf.Ticker(ticker)
+                    # We look for 'fast_info' - if it's empty, the stock is fake OR you're blocked
+                    info = check_stock.fast_info
+                    
+                    if info['last_price'] is None or str(info['last_price']) == "nan":
+                        st.error(f"❌ Could not verify '{ticker}'. Yahoo is blocked or ticker is fake.")
+                    else:
+                        portfolio[ticker] = {"buy_price": buy_price, "shares": shares}
+                        save_data(portfolio)
+                        st.success(f"✅ Added {ticker}!")
+                        st.rerun() # Refresh to show the new list
+                except Exception:
+                    st.error("❌ Connection error. Cannot verify stock right now.")
+
+st.divider()
+st.subheader("🗑️ Current Portfolio")
+if portfolio:
+    for t in list(portfolio.keys()):
+        col1, col2 = st.columns([4, 1])
+        col1.write(f"**{t}**")
+        if col2.button(f"Delete", key=f"del_{t}"):
+            del portfolio[t]
+            save_data(portfolio)
+            st.rerun() 
